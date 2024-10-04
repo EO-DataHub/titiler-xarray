@@ -1,5 +1,7 @@
 """Titiler-xarray API settings."""
 
+import os
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,7 +13,7 @@ class ApiSettings(BaseSettings):
     cors_origins: str = "*"
     cors_allow_methods: str = "GET"
     cachecontrol: str = "public, max-age=3600"
-    root_path: str = ""
+    root_path: str = os.getenv("TITILER_XARRAY_ROOT_PATH", "")
     debug: bool = False
 
     model_config = SettingsConfigDict(env_prefix="TITILER_XARRAY_", env_file=".env")
