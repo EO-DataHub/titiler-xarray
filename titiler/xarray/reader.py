@@ -67,7 +67,7 @@ def get_filesystem(
             else s3fs.S3Map(root=src_path, s3=s3_filesystem)
         )
     elif protocol == "reference":
-        reference_args = {"fo": src_path, "remote_options": {"anon": anon}}
+        reference_args = {"fo": src_path}
         return fsspec.filesystem("reference", **reference_args).get_mapper("")
     elif protocol in ["https", "http", "file"]:
         filesystem = fsspec.filesystem(protocol)  # type: ignore
