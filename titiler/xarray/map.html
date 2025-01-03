@@ -114,8 +114,12 @@
                         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     }).addTo(map);
                 }
+                
 
-                fetch('{{ tilejson_endpoint|safe }}')
+                console.log('Updating URL')
+                let fetchUrl = '{{ tilejson_endpoint|safe }}'
+                fetchUrl = fetchUrl.replace(/^http:/, 'https:')
+                fetch(fetchUrl)
                 .then(res => {
                     if (res.ok) return res.json()
                     throw new Error('Network response was not ok.')

@@ -25,8 +25,12 @@ RUN pdm lock && pdm export -f requirements --prod --without-hashes --output requ
 
 # TODO: Could move to pyproject.toml, but then might get merge conflicts when syncing with upstream fork
 RUN pip install uvicorn
+# Affine
+RUN pip install affine
 
 COPY . /app
 EXPOSE 8000
 ENV TEST_ENVIRONMENT=true
+# Debug for eveyrthing
+ENV DEBUG=true
 CMD ["uvicorn", "titiler.xarray.main:app", "--host", "0.0.0.0", "--port", "8000"]

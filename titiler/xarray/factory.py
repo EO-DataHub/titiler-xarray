@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Type
 from urllib.parse import urlencode
 
+from affine import Affine
 import jinja2
 import numpy as np
-from fastapi import Depends, Path, Query
+from fastapi import Depends, Path, Query, Request
 from pydantic import conint
 from rio_tiler.models import Info
-from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.templating import Jinja2Templates
 from typing_extensions import Annotated
@@ -30,7 +30,7 @@ class ZarrTilerFactory(BaseTilerFactory):
     reader: Type[ZarrReader] = ZarrReader
 
     def register_routes(self) -> None:  # noqa: C901
-        """Register Info / Tiles / TileJSON endoints."""
+        """Register Info / Tiles / TileJSON endpoints."""
 
         @self.router.get(
             "/variables",
@@ -38,6 +38,7 @@ class ZarrTilerFactory(BaseTilerFactory):
             responses={200: {"description": "Return dataset's Variables."}},
         )
         def variable_endpoint(
+            request: Request,
             url: Annotated[str, Query(description="Dataset URL")],
             group: Annotated[
                 Optional[int],
@@ -67,10 +68,17 @@ class ZarrTilerFactory(BaseTilerFactory):
                 ),
             ] = True,
         ) -> List[str]:
-            """return available variables."""
-            return self.reader.list_variables(
-                url, group=group, reference=reference, consolidated=consolidated
-            )
+            with self.reader(
+                src_path=url,
+                variable=None,
+                request=request,
+                group=group,
+                reference=reference,
+                decode_times=decode_times or True,
+                consolidated=consolidated or True,
+            ) as src_dst:
+                return list(src_dst.ds.data_vars)
+    
 
         @self.router.get(
             "/info",
@@ -80,6 +88,7 @@ class ZarrTilerFactory(BaseTilerFactory):
             responses={200: {"description": "Return dataset's basic info."}},
         )
         def info_endpoint(
+            request: Request,
             url: Annotated[str, Query(description="Dataset URL")],
             variable: Annotated[
                 str,
@@ -125,19 +134,20 @@ class ZarrTilerFactory(BaseTilerFactory):
             with self.reader(
                 url,
                 variable=variable,
+                request=request,
                 group=group,
                 reference=reference,
                 decode_times=decode_times,
                 drop_dim=drop_dim,
                 consolidated=consolidated,
             ) as src_dst:
-                info = src_dst.info().model_dump()
+                info_dict = src_dst.info().model_dump()
                 if show_times and "time" in src_dst.input.dims:
                     times = [str(x.data) for x in src_dst.input.time]
-                    info["count"] = len(times)
-                    info["times"] = times
+                    info_dict["count"] = len(times)
+                    info_dict["times"] = times
 
-            return Info(**info)
+            return Info(**info_dict)
 
         @self.router.get(r"/tiles/{z}/{x}/{y}", **img_endpoint_params)
         @self.router.get(r"/tiles/{z}/{x}/{y}.{format}", **img_endpoint_params)
@@ -155,6 +165,7 @@ class ZarrTilerFactory(BaseTilerFactory):
             **img_endpoint_params,
         )
         def tiles_endpoint(  # type: ignore
+            request: Request,
             z: Annotated[
                 int,
                 Path(
@@ -235,6 +246,7 @@ class ZarrTilerFactory(BaseTilerFactory):
             with self.reader(
                 url,
                 variable=variable,
+                request=request,
                 group=z if multiscale else None,
                 reference=reference,
                 decode_times=decode_times,
@@ -243,17 +255,14 @@ class ZarrTilerFactory(BaseTilerFactory):
                 tms=tms,
                 consolidated=consolidated,
             ) as src_dst:
-
                 image = src_dst.tile(
                     x, y, z, tilesize=scale * 256, nodata=src_dst.input.rio.nodata
                 )
 
             if post_process:
                 image = post_process(image)
-
             if rescale:
                 image.rescale(rescale)
-
             if color_formula:
                 image.apply_color_formula(color_formula)
 
@@ -263,7 +272,6 @@ class ZarrTilerFactory(BaseTilerFactory):
                 colormap=colormap,
                 **render_params,
             )
-
             return Response(content, media_type=media_type)
 
         @self.router.get(
@@ -382,6 +390,7 @@ class ZarrTilerFactory(BaseTilerFactory):
             with self.reader(
                 url,
                 variable=variable,
+                request=request,
                 group=group,
                 reference=reference,
                 decode_times=decode_times,
@@ -408,6 +417,7 @@ class ZarrTilerFactory(BaseTilerFactory):
             response_model_exclude_none=True,
         )
         def histogram(
+            request: Request,
             url: Annotated[str, Query(description="Dataset URL")],
             variable: Annotated[
                 str,
@@ -434,9 +444,11 @@ class ZarrTilerFactory(BaseTilerFactory):
                 ),
             ] = None,
         ):
+            """Compute histogram for a data variable."""
             with self.reader(
                 url,
                 variable=variable,
+                request=request,
                 reference=reference,
                 consolidated=consolidated,
                 group=group,
