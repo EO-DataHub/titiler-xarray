@@ -29,8 +29,8 @@ cache_client = get_redis()
 # ----------------------------------------------------------------
 
 CREDENTIALS_ENDPOINT = os.getenv(
-    "CREDENTIALS_ENDPOINT", 
-    "https://dev.eodatahub.org.uk/api/workspaces/s3/credentials"
+    "TITILER_XARRAY_CREDENTIALS_ENDPOINT",
+    "https://dev.eodatahub.org.uk/api/workspaces/s3/credentials",
 )
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 
@@ -38,6 +38,7 @@ WHITELIST_PATTERNS = [
     r"^https://workspaces-eodhp-[\w-]+\.s3\.eu-west-2\.amazonaws\.com/",
     r"^s3://workspaces-eodhp-[\w-]+/",
 ]
+
 
 def force_no_irsa() -> None:
     """
@@ -49,6 +50,7 @@ def force_no_irsa() -> None:
         if var in os.environ:
             del os.environ[var]
 
+
 def is_whitelisted_url(url: str) -> bool:
     """
     Check if the given URL matches ANY of the patterns in WHITELIST_PATTERNS.
@@ -59,18 +61,22 @@ def is_whitelisted_url(url: str) -> bool:
             return True
     return False
 
+
 def rewrite_https_to_s3_if_needed(url: str) -> str:
     """
     If the URL starts with https://workspaces-eodhp-*, rewrite to s3:// if it matches the pattern.
     Otherwise, return it unchanged.
     """
-    https_pattern = r"^https://(workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/(.*)"
+    https_pattern = (
+        r"^https://(workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/(.*)"
+    )
     match = re.match(https_pattern, url)
     if match:
         bucket_part = match.group(1)  # e.g. workspaces-eodhp-dev
-        key_part = match.group(2)    # e.g. path/to/file.zarr
+        key_part = match.group(2)  # e.g. path/to/file.zarr
         return f"s3://{bucket_part}/{key_part}"
     return url
+
 
 def fetch_ephemeral_creds(auth_header: str, cookie_header: str) -> Dict[str, str]:
     """
@@ -94,9 +100,11 @@ def fetch_ephemeral_creds(auth_header: str, cookie_header: str) -> Dict[str, str
         )
     return resp.json()
 
+
 # ----------------------------------------------------------------
-# 2) CORE UTILS 
+# 2) CORE UTILS
 # ----------------------------------------------------------------
+
 
 def parse_protocol(src_path: str, reference: Optional[bool] = False):
     """
@@ -110,6 +118,7 @@ def parse_protocol(src_path: str, reference: Optional[bool] = False):
     if reference:
         protocol = "reference"
     return protocol
+
 
 def xarray_engine(src_path: str):
     """
@@ -139,8 +148,7 @@ def xarray_open_dataset(
     if is_whitelisted_url(src_path):
         if request is None:
             raise HTTPException(
-                status_code=400,
-                detail="No Request object to fetch auth headers from"
+                status_code=400, detail="No Request object to fetch auth headers from"
             )
         auth_header = request.headers.get("authorization")
         cookie_header = request.headers.get("cookie")
@@ -162,7 +170,9 @@ def xarray_open_dataset(
                 client_kwargs={"region_name": DEFAULT_REGION},
             )
             file_handler = (
-                fs.open(src_path) if xr_engine == "h5netcdf" else fs.get_mapper(src_path)
+                fs.open(src_path)
+                if xr_engine == "h5netcdf"
+                else fs.get_mapper(src_path)
             )
         else:
             # no ephemeral => presumably public
@@ -181,7 +191,6 @@ def xarray_open_dataset(
         )
     else:
         raise ValueError(f"Unsupported protocol: {protocol}")
-
 
     xr_open_args: Dict[str, Any] = {
         "decode_coords": "all",
@@ -205,9 +214,11 @@ def xarray_open_dataset(
 
     return ds
 
+
 # ----------------------------------------------------------------
 # 4) Helpers for reading a variable
 # ----------------------------------------------------------------
+
 
 def arrange_coordinates(da: xarray.DataArray) -> xarray.DataArray:
     """
@@ -233,6 +244,7 @@ def arrange_coordinates(da: xarray.DataArray) -> xarray.DataArray:
     else:
         da = da.transpose("y", "x")
     return da
+
 
 def get_variable(
     ds: xarray.Dataset,
@@ -328,7 +340,9 @@ class ZarrReader(XarrayReader):
             self.bounds = tuple(self.input.rio.bounds())
             self.crs = self.input.rio.crs
             self._dims = [
-                d for d in self.input.dims if d not in [self.input.rio.x_dim, self.input.rio.y_dim]
+                d
+                for d in self.input.dims
+                if d not in [self.input.rio.x_dim, self.input.rio.y_dim]
             ]
         else:
             pass
