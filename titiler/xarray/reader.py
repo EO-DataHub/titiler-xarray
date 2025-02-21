@@ -29,9 +29,12 @@ cache_client = get_redis()
 # ----------------------------------------------------------------
 
 CREDENTIALS_ENDPOINT = os.getenv(
-    "CREDENTIALS_ENDPOINT", 
-    "https://dev.eodatahub.org.uk/api/workspaces/s3/credentials"
+    "TITILER_XARRAY_CREDENTIALS_ENDPOINT", 
+    None,
 )
+
+print('Creds endpoint', CREDENTIALS_ENDPOINT)
+
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 
 WHITELIST_PATTERNS = [
@@ -152,7 +155,7 @@ def xarray_open_dataset(
 
     if protocol == "reference":
         reference_args = {"fo": src_path}
-        fs = fsspec.filesystem("reference", **reference_args).get_mapper("")
+        file_handler = fsspec.filesystem("reference", **reference_args).get_mapper("")
     elif protocol == "s3":
         if creds_dict:
             fs = s3fs.S3FileSystem(
